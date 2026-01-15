@@ -108,5 +108,4 @@
 
 ---
 
-> This checklist defines a **minimum complete and gradable implementation**.
-> Extra optimizations are optional and not required for full score.
+
