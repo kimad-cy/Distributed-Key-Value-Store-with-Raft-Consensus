@@ -1,80 +1,112 @@
-# Distributed-Key-Value-Store-with-Raft-Consensus
+# Distributed KV Store – TODO Checklist
 
-1- Core Node State & Local Storage
-  ~ Implement a thread-safe in-memory key-value store.
-  
-  ~ Apply committed log entries to local state.
-  
-  ~ Ensure all shared state is protected with locks.
+> High-level implementation checklist 
 
-2- Client REST API
+---
 
-  ~ Expose GET, SET, and cluster status endpoints.
+## ⬜ 1. Core Node State & Local Storage
 
-  ~ Accept writes only on the leader.
+* ⬜ Initialize Node with ID, Address, Peers, Role, Log, CommitIdx
+* ⬜ Create thread-safe in-memory key-value store
+* ⬜ Apply committed log entries to local state
+* ⬜ Ensure all shared state is protected with mutexes
 
-  ~ Forward requests to the leader when necessary.
+---
 
-3- RPC Communication Layer
+## ⬜ 2. Client REST API
 
-  ~ Enable node-to-node communication using RPC.
+* ⬜ Implement GET /get/{key}
+* ⬜ Implement POST /set
+* ⬜ Implement GET /cluster/status
+* ⬜ Accept writes only on leader
+* ⬜ Forward client requests to leader when needed
 
-  ~ Handle timeouts and unreachable peers gracefully.
+---
 
-  ~ Support concurrent requests between nodes.
+## ⬜ 3. RPC Communication Layer
 
-4-  Node Roles & State Machine
+* ⬜ Set up RPC server on each node
+* ⬜ Enable node-to-node RPC clients
+* ⬜ Implement timeouts using context.WithTimeout
+* ⬜ Handle unreachable or slow peers safely
 
-  ~ Manage transitions between Follower, Candidate, and Leader.
+---
 
-  ~ Track terms and leader identity consistently.
+## ⬜ 4. Node Roles & State Machine
 
-  ~ Reset timers correctly on role changes.
+* ⬜ Support Follower, Candidate, Leader roles
+* ⬜ Track current term and leader identity
+* ⬜ Implement safe role transitions
+* ⬜ Reset timers on role or term changes
 
-5- Leader Election
+---
 
-  ~ Trigger elections on heartbeat timeouts.
+## ⬜ 5. Leader Election
 
-  ~ Collect votes concurrently from peers.
+* ⬜ Trigger elections on heartbeat timeout
+* ⬜ Start election as Candidate
+* ⬜ Send RequestVote RPCs concurrently
+* ⬜ Count votes and detect majority
+* ⬜ Become Leader only on majority
+* ⬜ Step down on higher term detection
 
-  ~ Elect a leader only with majority agreement.
+---
 
-6- Heartbeat Mechanism
+## ⬜ 6. Heartbeat Mechanism
 
-  ~ Send periodic heartbeats from the leader.
+* ⬜ Start periodic heartbeats when Leader
+* ⬜ Send empty AppendEntries to peers
+* ⬜ Reset follower election timers on heartbeat
+* ⬜ Detect leader failure via missed heartbeats
 
-  ~ Prevent unnecessary elections in healthy clusters.
+---
 
-  ~ Detect leader failure quickly.
+## ⬜ 7. Log Replication
 
- 7- Log Replication
+* ⬜ Append new entries to leader log
+* ⬜ Replicate entries to peers concurrently
+* ⬜ Commit entries after majority replication
+* ⬜ Apply committed entries in order
+* ⬜ Handle offline or slow nodes gracefully
 
-  ~ Replicate log entries from leader to followers.
+---
 
-  ~ Commit entries only after majority confirmation.
+## ⬜ 8. Persistence & Recovery
 
-  ~ Ensure logs remain consistent across nodes.
+* ⬜ Persist log and commit index to disk
+* ⬜ Persist current term
+* ⬜ Load persisted state on startup
+* ⬜ Resume operation after crash
 
-8- Persistence & Recovery
+---
 
-  ~ Persist logs and metadata to disk.
+## ⬜ 9. Log Compaction
 
-  ~ Reload state on node restart.
+* ⬜ Run periodic background compaction task
+* ⬜ Snapshot current key-value state
+* ⬜ Remove committed log entries safely
+* ⬜ Prevent unbounded log growth
 
-  ~ Resume operation without data loss.
+---
 
- 9- Log Compaction
+## ⬜ 10. Cluster Status & Monitoring
 
-  ~ Periodically snapshot committed state.
+* ⬜ Report current node role
+* ⬜ Report leader identity
+* ⬜ Report peer health
+* ⬜ Expose replication and commit progress
 
-  ~ Remove old log entries safely.
+---
 
-  ~ Reduce memory usage over time.
+## ✅ Completion Criteria
 
-10- Cluster Status & Monitoring
+* ⬜ Data replicated to at least 2/3 nodes
+* ⬜ Leader re-elected correctly on failure
+* ⬜ No race conditions under concurrent SETs
+* ⬜ Nodes recover correctly after restart
+* ⬜ 3-node cluster can be started and documented
 
-  ~ Expose current leader and node roles.
+---
 
-  ~ Report peer health and commit progress.
-
-  ~ Aid debugging and evaluation.
+> This checklist defines a **minimum complete and gradable implementation**.
+> Extra optimizations are optional and not required for full score.
