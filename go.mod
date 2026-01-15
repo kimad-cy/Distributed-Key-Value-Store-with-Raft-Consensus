@@ -1,3 +1,3 @@
-module github.com/kimad-cy/Distributed-Key-Value-Store-with-Raft-Consensus
+module Distributed-Key-Value-Store-with-Raft-Consensus
 
-go 1.22.5
+go 1.21
