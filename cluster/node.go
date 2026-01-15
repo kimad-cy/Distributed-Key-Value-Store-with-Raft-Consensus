@@ -29,7 +29,7 @@ type RaftState struct {
     VotedFor      int    // ID of voted candidate
     LastLogIndex  int
     LastLogTerm   int
-    //StateMachine  *KVStore
+    StateMachine  *store.KVStore
 }
 
 
