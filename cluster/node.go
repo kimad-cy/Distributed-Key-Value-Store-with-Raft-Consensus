@@ -13,8 +13,13 @@ type Node struct {
 	Role string `json:"role"`
 	Log []LogEntry `json:"log"`
 	CommitIdx int `json:"commit_index"`
-	mu sync.RWMutex
+	CurrentTerm int
+    VotedFor int  
+	lastApplied int
+	CurrentLeader int
+	VotesReceived []int
 	Store     *store.KVStore 
+	mu sync.RWMutex
 }
 
 type LogEntry struct {
@@ -22,14 +27,6 @@ type LogEntry struct {
 	Command string `json:"command"` 
 	Key string `json:"key"`
 	Value interface{} `json:"value"`
-}
-
-type RaftState struct {
-    CurrentTerm   int
-    VotedFor      int    // ID of voted candidate
-    LastLogIndex  int
-    LastLogTerm   int
-    StateMachine  *store.KVStore
 }
 
 
@@ -47,4 +44,22 @@ func NewNode(id int, address string , peers []string) (*Node){
 	return &node
 }
 
+func (n *Node) recoverState(){
+	n.Role = "Follower"
+	n.CurrentLeader = -1
+}
 
+func (n *Node) startElection(){
+	n.CurrentTerm ++
+	n.Role = "Candidate"
+	n.VotedFor = n.ID
+	n.VotesReceived = append(n.VotesReceived, n.ID)
+	lastLogTerm := 0
+	if len(n.Log) > 0{
+		lastLogTerm = n.Log[len(n.Log)-1].Term
+	}
+	for _, node := n.Peers{
+		node.sendRequestVote(n.ID, n.CurrentTerm, len(n.Log), lastLogTerm)
+	}
+	
+}
