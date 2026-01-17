@@ -1,7 +1,8 @@
 package store
 
 import (
-    "sync")
+    "sync"
+)
 
 type KVStore struct {
     data map[string]interface{}

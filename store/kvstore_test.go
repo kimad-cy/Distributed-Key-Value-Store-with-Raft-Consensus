@@ -1,8 +1,7 @@
 package store
 
 import (
-	"testing"
-)
+	"testing")
 
 func TestKVStoreBasicOperations(t *testing.T) {
 	store := NewKVStore()
