@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"fmt"
 	"sync"
 
 	"Distributed-Key-Value-Store-with-Raft-Consensus/store"
@@ -38,28 +39,16 @@ func NewNode(id int, address string , peers []string) (*Node){
 		Role: "Follower",
 		Log: []LogEntry{},
 		CommitIdx: 0,
+		VotedFor: -1,
+		CurrentLeader: -1,
 		Store: store.NewKVStore(),
 
 	}
 	return &node
 }
 
-func (n *Node) recoverState(){
-	n.Role = "Follower"
-	n.CurrentLeader = -1
-}
-
-func (n *Node) startElection(){
-	n.CurrentTerm ++
-	n.Role = "Candidate"
-	n.VotedFor = n.ID
-	n.VotesReceived = append(n.VotesReceived, n.ID)
-	lastLogTerm := 0
-	if len(n.Log) > 0{
-		lastLogTerm = n.Log[len(n.Log)-1].Term
-	}
-	for _, node := n.Peers{
-		node.sendRequestVote(n.ID, n.CurrentTerm, len(n.Log), lastLogTerm)
-	}
-	
+func (n *Node) becomeLeader() {
+	n.Role = "Leader"
+	n.CurrentLeader = n.ID
+	fmt.Printf("[Node %d] 🟢 BECAME LEADER (term %d)\n", n.ID, n.CurrentTerm)
 }
