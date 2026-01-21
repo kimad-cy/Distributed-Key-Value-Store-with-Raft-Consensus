@@ -88,6 +88,9 @@ func (n *Node) Start() error {
 
 	fmt.Printf("[Node %d] listening on %s\n", n.ID, n.Address)
 	go rpc.Accept(listener)
+
+	n.startElectionTimer()
+	
 	return nil
 }
 

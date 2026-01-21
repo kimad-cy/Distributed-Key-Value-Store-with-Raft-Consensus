@@ -2,7 +2,9 @@ package cluster
 
 import (
 	"fmt"
+	"math/rand"
 	"sync"
+	"time"
 
 	"Distributed-Key-Value-Store-with-Raft-Consensus/store"
 )
@@ -19,6 +21,7 @@ type Node struct {
 	lastApplied int
 	CurrentLeader int
 	VotesReceived []int
+	ElectionTimer *time.Timer
 	Store     *store.KVStore 
 	mu sync.RWMutex
 }
@@ -50,5 +53,34 @@ func NewNode(id int, address string , peers []string) (*Node){
 func (n *Node) becomeLeader() {
 	n.Role = "Leader"
 	n.CurrentLeader = n.ID
-	fmt.Printf("[Node %d] 🟢 BECAME LEADER (term %d)\n", n.ID, n.CurrentTerm)
+	fmt.Printf("[Node %d] BECAME LEADER (term %d)\n", n.ID, n.CurrentTerm)
 }
+
+func randomElectionTimeout() time.Duration {
+    return time.Duration(150+rand.Intn(150)) * time.Millisecond
+}
+
+func (n *Node) startElectionTimer() {
+	if n.ElectionTimer != nil {
+        n.ElectionTimer.Stop()
+    }
+
+    timeout := randomElectionTimeout()
+
+    
+    n.ElectionTimer = time.AfterFunc(timeout, func() {
+        n.mu.Lock()
+		defer n.mu.Unlock()
+
+		// If already leader, do nothing
+		if n.Role == "Leader" {
+			return
+		}
+
+		fmt.Printf("[Node %d] election timeout\n", n.ID)
+
+		go n.StartElection()
+    })
+}
+
+

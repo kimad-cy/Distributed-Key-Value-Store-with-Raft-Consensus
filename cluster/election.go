@@ -42,7 +42,7 @@ func (n *Node) StartElection() {
 	n.VotesReceived = make([]int, 1)
 	n.mu.Unlock()
 
-	fmt.Printf("[Node %d] 🔵 starting election (term %d)\n", n.ID, n.CurrentTerm)
+	fmt.Printf("[Node %d] starting election (term %d)\n", n.ID, n.CurrentTerm)
 
 	lastLogTerm := 0
 	if len(n.Log) > 0{
