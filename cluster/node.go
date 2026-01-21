@@ -3,6 +3,7 @@ package cluster
 import (
 	"fmt"
 	"math/rand"
+	"net/rpc"
 	"sync"
 	"time"
 
@@ -23,6 +24,7 @@ type Node struct {
 	VotesReceived []int
 	ElectionTimer *time.Timer
 	heartbeatTicker *time.Ticker
+	IDToAddr map[int]string
 	Store     *store.KVStore 
 	mu sync.RWMutex
 }
@@ -33,6 +35,8 @@ type LogEntry struct {
 	Key string `json:"key"`
 	Value interface{} `json:"value"`
 }
+
+
 
 
 func NewNode(id int, address string , peers []string) (*Node){
@@ -46,7 +50,6 @@ func NewNode(id int, address string , peers []string) (*Node){
 		VotedFor: -1,
 		CurrentLeader: -1,
 		Store: store.NewKVStore(),
-
 	}
 	return &node
 }
@@ -63,6 +66,8 @@ func (n *Node) becomeLeader() {
 
 	n.startHeartbeat()
 }
+
+/*************************  Election Timer Functions  ********************************/
 
 func randomElectionTimeout() time.Duration {
     return time.Duration(150+rand.Intn(150)) * time.Millisecond
@@ -100,3 +105,81 @@ func (n *Node) resetElectionTimer() {
 	n.ElectionTimer.Stop()
 	n.ElectionTimer.Reset(randomElectionTimeout())
 }
+
+
+/*************************  Handling Client Requests ********************************/
+
+type ClientCommandArgs struct {
+    Command string
+    Key     string
+    Value   interface{}
+}
+
+type ClientCommandReply struct {
+    Success bool
+}
+
+
+
+func (n *Node) HandleClientCommand(cmd string, key string, value interface{}){
+	if n.Role == "Leader" {
+		entry := LogEntry{
+			Term: n.CurrentTerm,
+			Command: cmd,
+			Key: key,
+			Value: value,
+		}
+		n.mu.Lock()
+		defer n.mu.Unlock()
+		n.Log = append(n.Log, entry)
+
+		return
+	}
+
+	n.ForwardToLeader(cmd, key, value)
+}
+
+func (n *Node) ForwardToLeader(cmd string, key string, value interface{}) error {
+    n.mu.RLock()
+    leaderID := n.CurrentLeader
+    n.mu.RUnlock()
+
+    if leaderID == -1 {
+        return fmt.Errorf("no leader currently known, try again later")
+    }
+
+    var leaderAddr string
+    // for _, addr := range n.Peers {
+    //     // find the address of the leader 
+    // }
+    if leaderAddr == "" {
+        return fmt.Errorf("leader address not found")
+    }
+
+    // Prepare a request object
+    args := &ClientCommandArgs{
+        Command: cmd,
+        Key:     key,
+        Value:   value,
+    }
+    reply := &ClientCommandReply{}
+
+    // Call leader via RPC
+    client, err := rpc.Dial("tcp", leaderAddr)
+    if err != nil {
+        return fmt.Errorf("failed to connect to leader: %v", err)
+    }
+    defer client.Close()
+
+    err = client.Call("Node.HandleClientCommandRPC", args, reply)
+    if err != nil {
+        return fmt.Errorf("leader RPC failed: %v", err)
+    }
+
+    if !reply.Success {
+        return fmt.Errorf("leader rejected command")
+    }
+
+    return nil
+}
+
