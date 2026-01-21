@@ -4,6 +4,16 @@
 
 ---
 
+* Log Replication: Leader sends new client commands to followers to append to their logs.
+
+* Commit & Apply Entries: Track committed log entries and apply them in order to the KVStore.
+
+* Client API (SET/GET): Accept client requests, forward to leader, and return results after commit.
+
+* Leader Crash / Failover Handling: Detect leader failure, trigger new election, ensure single leader per term.
+
+# <Details>
+
 ##  1. Core Node State & Local Storage
 
 *  Initialize Node with ID, Address, Peers, Role, Log, CommitIdx
