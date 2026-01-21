@@ -22,6 +22,7 @@ type Node struct {
 	CurrentLeader int
 	VotesReceived []int
 	ElectionTimer *time.Timer
+	heartbeatTicker *time.Ticker
 	Store     *store.KVStore 
 	mu sync.RWMutex
 }
@@ -53,7 +54,14 @@ func NewNode(id int, address string , peers []string) (*Node){
 func (n *Node) becomeLeader() {
 	n.Role = "Leader"
 	n.CurrentLeader = n.ID
+
+	if n.ElectionTimer != nil {
+		n.ElectionTimer.Stop()
+	}
+
 	fmt.Printf("[Node %d] BECAME LEADER (term %d)\n", n.ID, n.CurrentTerm)
+
+	n.startHeartbeat()
 }
 
 func randomElectionTimeout() time.Duration {
@@ -84,3 +92,11 @@ func (n *Node) startElectionTimer() {
 }
 
 
+func (n *Node) resetElectionTimer() {
+	if n.ElectionTimer == nil {
+		n.startElectionTimer()
+		return
+	}
+	n.ElectionTimer.Stop()
+	n.ElectionTimer.Reset(randomElectionTimeout())
+}
