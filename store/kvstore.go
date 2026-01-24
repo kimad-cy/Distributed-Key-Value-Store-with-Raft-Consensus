@@ -2,12 +2,22 @@ package store
 
 import (
     "sync"
+
 )
 
 type KVStore struct {
     data map[string]interface{}
     mu   sync.RWMutex
 }
+
+type LogEntry struct {
+	Term int `json:"term"`
+	Command string `json:"command"` 
+	Key string `json:"key"`
+	Value interface{} `json:"value"`
+}
+
+
 
 func NewKVStore() *KVStore {
     return &KVStore{
@@ -33,6 +43,18 @@ func (s *KVStore) Delete(key string) {
     defer s.mu.Unlock()
     delete(s.data, key)
 }
+
+func (s *KVStore) Apply(entry LogEntry) {
+    switch entry.Command{
+    case "SET":
+        s.Set(entry.Key, entry.Value)
+    case "DELETE":
+        s.Delete(entry.Key)
+    default:
+        // ignore / error
+    }
+}
+
 
 // For debugging/log compaction (implement later)
 func (s *KVStore) Snapshot() map[string]interface{} {
