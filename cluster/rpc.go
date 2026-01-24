@@ -19,6 +19,20 @@ type RequestVoteReply struct {
 	VoteGranted bool
 }
 
+func (n *Node) sendRequestVote(peerAddr string,args *RequestVoteArgs,) (*RequestVoteReply, error) {
+
+	client, err := rpc.Dial("tcp", peerAddr)
+	if err != nil {
+		fmt.Printf("[Node %d] ERROR connecting to %s: %v\n", n.ID, peerAddr, err)
+		return nil, err
+	}
+	defer client.Close()
+
+	reply := &RequestVoteReply{}
+	err = client.Call("Node.RequestVote", args, reply)
+	return reply, err
+}
+
 
 func (n *Node) RequestVote(args *RequestVoteArgs,reply *RequestVoteReply,) error {
 	n.mu.Lock()
@@ -62,20 +76,6 @@ func (n *Node) RequestVote(args *RequestVoteArgs,reply *RequestVoteReply,) error
 
 	reply.Term = n.CurrentTerm
 	return nil
-}
-
-func (n *Node) sendRequestVote(peerAddr string,args *RequestVoteArgs,) (*RequestVoteReply, error) {
-
-	client, err := rpc.Dial("tcp", peerAddr)
-	if err != nil {
-		fmt.Printf("[Node %d] ERROR connecting to %s: %v\n", n.ID, peerAddr, err)
-		return nil, err
-	}
-	defer client.Close()
-
-	reply := &RequestVoteReply{}
-	err = client.Call("Node.RequestVote", args, reply)
-	return reply, err
 }
 
 func (n *Node) Start() error {

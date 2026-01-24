@@ -2,38 +2,6 @@ package cluster
 
 import "fmt"
 
-func (n *Node) processVoteReply(reply *RequestVoteReply) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	// If reply has higher term: step down
-	if reply.Term > n.CurrentTerm {
-		n.CurrentTerm = reply.Term
-		n.Role = "Follower"
-		n.VotedFor = -1
-		n.CurrentLeader = -1
-		n.VotesReceived = nil
-		return
-	}
-
-	// Ignore replies if no longer candidate
-	if n.Role != "Candidate" {
-		return
-	}
-
-	// Count granted votes
-	if reply.VoteGranted {
-		n.VotesReceived = append(n.VotesReceived, 1) 
-		fmt.Printf("[Node %d] received vote (%d total)\n", n.ID, len(n.VotesReceived))
-
-		// Majority check
-		if len(n.VotesReceived) >= (len(n.Peers)+1)/2+1 {
-			n.becomeLeader()
-		}
-	}
-}
-
-
 func (n *Node) StartElection() {
 	n.mu.Lock()
 	n.CurrentTerm++
@@ -66,3 +34,35 @@ func (n *Node) StartElection() {
 		}(peer)
 	}
 }
+
+func (n *Node) processVoteReply(reply *RequestVoteReply) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	// If reply has higher term: step down
+	if reply.Term > n.CurrentTerm {
+		n.CurrentTerm = reply.Term
+		n.Role = "Follower"
+		n.VotedFor = -1
+		n.CurrentLeader = -1
+		n.VotesReceived = nil
+		return
+	}
+
+	// Ignore replies if no longer candidate
+	if n.Role != "Candidate" {
+		return
+	}
+
+	// Count granted votes
+	if reply.VoteGranted {
+		n.VotesReceived = append(n.VotesReceived, 1) 
+		fmt.Printf("[Node %d] received vote (%d total)\n", n.ID, len(n.VotesReceived))
+
+		// Majority check
+		if len(n.VotesReceived) >= (len(n.Peers)+1)/2+1 {
+			n.becomeLeader()
+		}
+	}
+}
+

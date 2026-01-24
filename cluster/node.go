@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"net/rpc"
 	"sync"
@@ -11,21 +12,39 @@ import (
 )
 
 type Node struct {
+	//Node identity & cluster info
 	ID int `json:"id"`
 	Address string `json:"address"` 
 	Peers []string `json:"peers"`
+
+	//Raft role & term state 
 	Role string `json:"role"`
-	Log []LogEntry `json:"log"`
-	CommitIdx int `json:"commit_index"`
 	CurrentTerm int
-    VotedFor int  
+	VotedFor int 
+	CurrentLeader int 
+
+	//Raft Log
+	Log []LogEntry `json:"log"`
+
+	//Commit & Apply State
+	CommitIdx int `json:"commit_index"`
 	lastApplied int
-	CurrentLeader int
+	
+	//Leader Election
 	VotesReceived []int
 	ElectionTimer *time.Timer
+
+	//Heartbeats
 	heartbeatTicker *time.Ticker
-	IDToAddr map[int]string
+
+	// Leader-only 
+    sentLength  map[string]int   // followerAddr → last sent index
+    ackedLength map[string]int   // followerAddr → last acked index
+
+	//State Machine
 	Store     *store.KVStore 
+
+	//Concurrency
 	mu sync.RWMutex
 }
 
@@ -36,9 +55,7 @@ type LogEntry struct {
 	Value interface{} `json:"value"`
 }
 
-
-
-
+//Construuctor
 func NewNode(id int, address string , peers []string) (*Node){
 	node := Node{
 		ID: id,
@@ -63,6 +80,14 @@ func (n *Node) becomeLeader() {
 	}
 
 	fmt.Printf("[Node %d] BECAME LEADER (term %d)\n", n.ID, n.CurrentTerm)
+
+	for _, peer := range n.Peers {
+		go func(p string) {
+			n.ackedLength[p] = 0
+			n.sentLength[p] = len(n.Log)
+			n.ReplicateLog(n.ID, p)
+		}(peer)
+	}
 
 	n.startHeartbeat()
 }
@@ -132,6 +157,28 @@ func (n *Node) HandleClientCommand(cmd string, key string, value interface{}){
 		n.mu.Lock()
 		defer n.mu.Unlock()
 		n.Log = append(n.Log, entry)
+
+		fmt.Println("Waiting to be applied")
+
+
+		prevTerm := 0
+		if len(n.Log) != 0{
+			prevTerm = n.Log[len(n.Log)-1].Term
+		}
+		entries := []LogEntry{}
+		entries = append(entries, entry)
+		args := &AppendEntriesArgs{
+			Term: n.CurrentTerm,
+			LeaderID: n.ID,
+			PrevLogIndex: len(n.Log),
+			PrevLogTerm: prevTerm,
+			Entries: entries,
+			LeaderCommit: n.CommitIdx,
+		}
+
+		reply := AppendEntriesReply{}
+
+		n.AppendEntries(args, &reply)
 
 		return
 	}
