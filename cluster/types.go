@@ -33,3 +33,14 @@ type RequestVoteReply struct {
 	Term        int
 	VoteGranted bool
 }
+
+
+type ClientCommandArgs struct {
+    Command string
+    Key     string
+    Value   interface{}
+}
+
+type ClientCommandReply struct {
+    Success bool
+}

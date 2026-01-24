@@ -22,13 +22,14 @@ func (n *Node) startElectionTimer() {
     
     n.ElectionTimer = time.AfterFunc(timeout, func() {
         n.mu.Lock()
-		defer n.mu.Unlock()
 
 		// If already leader, do nothing
 		if n.Role == "Leader" {
+			n.mu.Unlock()
 			return
 		}
 
+		n.mu.Unlock()
 		fmt.Printf("[Node %d] election timeout\n", n.ID)
 
 		go n.StartElection()
@@ -52,15 +53,16 @@ func (n *Node) StartElection() {
 	n.CurrentTerm++
 	n.Role = "Candidate"
 	n.VotedFor = n.ID
-	n.VotesReceived = make([]int, 1)
-	n.mu.Unlock()
-
-	fmt.Printf("[Node %d] starting election (term %d)\n", n.ID, n.CurrentTerm)
-
+	n.VotesReceived = []int{1}
+	
 	lastLogTerm := 0
 	if len(n.Log) > 0{
 		lastLogTerm = n.Log[len(n.Log)-1].Term
 	}
+
+	n.mu.Unlock()
+
+	fmt.Printf("[Node %d] starting election (term %d)\n", n.ID, n.CurrentTerm)
 
 	args := &RequestVoteArgs{
 		Term:         n.CurrentTerm,
@@ -162,6 +164,11 @@ func (n *Node) becomeLeader() {
 	n.Role = "Leader"
 	n.CurrentLeader = n.ID
 
+	for _, peer := range n.Peers {
+        n.ackedLength[peer] = 0
+        n.sentLength[peer] = len(n.Log)
+    }
+
 	if n.ElectionTimer != nil {
 		n.ElectionTimer.Stop()
 	}
@@ -169,11 +176,7 @@ func (n *Node) becomeLeader() {
 	fmt.Printf("[Node %d] BECAME LEADER (term %d)\n", n.ID, n.CurrentTerm)
 
 	for _, peer := range n.Peers {
-		go func(p string) {
-			n.ackedLength[p] = 0
-			n.sentLength[p] = len(n.Log)
-			n.ReplicateLog(p)
-		}(peer)
+		go n.ReplicateLog(peer)
 	}
 
 	n.StartHeartbeat()

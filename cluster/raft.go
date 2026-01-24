@@ -83,9 +83,11 @@ func (n *Node) ApplyEntries(args AppendEntriesArgs){
 /*****************************Leader Side ************************************/
 
 func(n *Node) ReplicateLog(FollowerAddr string){
-	if n.Role != "Leader" {
-		return
-	}
+	n.mu.Lock()
+    if n.Role != "Leader" {
+        n.mu.Unlock()
+        return
+    }
 
 	prefixLen := n.sentLength[FollowerAddr]
 
@@ -112,19 +114,28 @@ func(n *Node) ReplicateLog(FollowerAddr string){
 	}
 	reply := &AppendEntriesReply{}
 
-	client, err := rpc.Dial("tcp", FollowerAddr)
+	n.mu.Unlock()
+
+	client, err:= rpc.Dial("tcp", FollowerAddr)
 	if err != nil {
 		fmt.Printf("[Node %d] ERROR connecting to %s: %v\n", FollowerAddr, err)
 		return 
 	}
 	defer client.Close()
 
-	client.Call("Node.AppendEntries", args, reply)
+	err = client.Call("Node.AppendEntries", args, reply)
+	if err != nil {
+		fmt.Printf("[Node %d] ERROR calling AppendEntries on %s: %v\n", n.ID, FollowerAddr, err)
+		return
+	}
 
 	n.HandleAppendEntriesReply(FollowerAddr, *reply)
 }
 
 func (n *Node) HandleAppendEntriesReply(followerAddr string, resp AppendEntriesReply){
+	n.mu.Lock()
+    defer n.mu.Unlock()
+
 	if resp.Term == n.CurrentTerm && n.Role == "Leader" {
 
 		if resp.Success && resp.Ack >= n.ackedLength[followerAddr]{
@@ -169,7 +180,7 @@ func (n *Node) CommitLogEntries(){
 			maxReady = ready[i]
 		}
 	}
-	if len(ready) > 0 && maxReady > n.CommitIdx && n.Log[maxReady -1].Term == n.CurrentTerm{
+	if len(ready) > 0 && maxReady > n.CommitIdx && n.Log[maxReady].Term == n.CurrentTerm{
 		for i:= n.CommitIdx;i<= maxReady -1; i++{
 			raftEntry := n.Log[i]
 

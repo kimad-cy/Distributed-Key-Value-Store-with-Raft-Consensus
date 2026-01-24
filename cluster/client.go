@@ -5,57 +5,27 @@ import (
 	"net/rpc"
 )
 
-
-type ClientCommandArgs struct {
-    Command string
-    Key     string
-    Value   interface{}
-}
-
-type ClientCommandReply struct {
-    Success bool
-}
-
-
-
 func (n *Node) HandleClientCommand(cmd string, key string, value interface{}){
-	if n.Role == "Leader" {
-		entry := LogEntry{
-			Term: n.CurrentTerm,
-			Command: cmd,
-			Key: key,
-			Value: value,
-		}
-		n.mu.Lock()
-		defer n.mu.Unlock()
-		n.Log = append(n.Log, entry)
-
-		fmt.Println("Waiting to be applied")
-
-
-		prevTerm := 0
-		if len(n.Log) != 0{
-			prevTerm = n.Log[len(n.Log)-1].Term
-		}
-		entries := []LogEntry{}
-		entries = append(entries, entry)
-		args := &AppendEntriesArgs{
-			Term: n.CurrentTerm,
-			LeaderID: n.ID,
-			PrevLogIndex: len(n.Log),
-			PrevLogTerm: prevTerm,
-			Entries: entries,
-			LeaderCommit: n.CommitIdx,
-		}
-
-		reply := AppendEntriesReply{}
-
-		n.AppendEntries(args, &reply)
-
-		return
-	}
-
-	n.ForwardToLeader(cmd, key, value)
+    n.mu.Lock()
+    if n.Role != "Leader" {
+        n.mu.Unlock()
+        fmt.Println("no leader currently known, try again later")
+        return
+    }
+    
+    entry := LogEntry{
+        Term: n.CurrentTerm,
+        Command: cmd,
+        Key: key,
+        Value: value,
+    }
+    n.Log = append(n.Log, entry)
+    n.ackedLength[n.Address] = len(n.Log)
+    n.mu.Unlock()
+    
+    for _, peer := range n.Peers {
+        go n.ReplicateLog(peer)
+    }
 }
 
 func (n *Node) ForwardToLeader(cmd string, key string, value interface{}) error {
