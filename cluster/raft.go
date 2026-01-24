@@ -2,8 +2,8 @@ package cluster
 
 import (
 	"Distributed-Key-Value-Store-with-Raft-Consensus/store"
+	"context"
 	"fmt"
-	"net/rpc"
 )
 
 /***************************** Follower Side ************************************/
@@ -112,24 +112,33 @@ func(n *Node) ReplicateLog(FollowerAddr string){
 		Entries: entries,
 		LeaderCommit: n.CommitIdx,
 	}
-	reply := &AppendEntriesReply{}
 
 	n.mu.Unlock()
 
-	client, err:= rpc.Dial("tcp", FollowerAddr)
-	if err != nil {
-		fmt.Printf("[Node %d] ERROR connecting to %s: %v\n", FollowerAddr, err)
-		return 
-	}
-	defer client.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), RPCTimeout)
+    defer cancel()
 
-	err = client.Call("Node.AppendEntries", args, reply)
-	if err != nil {
-		fmt.Printf("[Node %d] ERROR calling AppendEntries on %s: %v\n", n.ID, FollowerAddr, err)
-		return
-	}
+    // Dial with context
+    client, err := dialWithContext(ctx, "tcp", FollowerAddr)
+    if err != nil {
+        fmt.Printf("[Node %d] ERROR connecting to %s: %v\n", n.ID, FollowerAddr, err)
+        return
+    }
+    defer client.Close()
 
-	n.HandleAppendEntriesReply(FollowerAddr, *reply)
+    // Make RPC call with context
+    reply := &AppendEntriesReply{}
+    err = callRPCWithContext(ctx, client, "Node.AppendEntries", args, reply)
+    if err != nil {
+        if err == context.DeadlineExceeded {
+            fmt.Printf("[Node %d] RPC timeout to %s\n", n.ID, FollowerAddr)
+        } else {
+            fmt.Printf("[Node %d] RPC error to %s: %v\n", n.ID, FollowerAddr, err)
+        }
+        return
+    }
+
+    n.HandleAppendEntriesReply(FollowerAddr, *reply)
 }
 
 func (n *Node) HandleAppendEntriesReply(followerAddr string, resp AppendEntriesReply){
