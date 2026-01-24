@@ -2,7 +2,6 @@ package cluster
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
 	"net/rpc"
 	"sync"
@@ -85,11 +84,55 @@ func (n *Node) becomeLeader() {
 		go func(p string) {
 			n.ackedLength[p] = 0
 			n.sentLength[p] = len(n.Log)
-			n.ReplicateLog(n.ID, p)
+			n.ReplicateLog(p)
 		}(peer)
 	}
 
-	n.startHeartbeat()
+	n.StartHeartbeat()
+}
+
+func(n *Node) ReplicateLog(FollowerAddr string){
+	if n.Role != "Leader" {
+		return
+	}
+
+	prefixLen := n.sentLength[FollowerAddr]
+
+	if prefixLen > len(n.Log) {
+		prefixLen = len(n.Log)
+	}
+
+	var prefixTerm int
+	if prefixLen == 0 {
+		prefixTerm = 0
+	} else {
+		prefixTerm = n.Log[prefixLen-1].Term
+	}
+
+	entries := n.Log[prefixLen:len(n.Log)]
+	
+	args := &AppendEntriesArgs{
+		Term: n.CurrentTerm,
+		LeaderID: n.ID,
+		PrevLogIndex: prefixLen,
+		PrevLogTerm: prefixTerm,
+		Entries: entries,
+		LeaderCommit: n.CommitIdx,
+	}
+	reply := &AppendEntriesReply{}
+
+	client, err := rpc.Dial("tcp", FollowerAddr)
+	if err != nil {
+		fmt.Printf("[Node %d] ERROR connecting to %s: %v\n", FollowerAddr, err)
+		return 
+	}
+	defer client.Close()
+
+	client.Call("Node.AppendEntries", args, reply)
+
+	n.HandleAppendEntriesReply(FollowerAddr, *reply)
+
+
 }
 
 /*************************  Election Timer Functions  ********************************/

@@ -93,9 +93,22 @@ func (n *Node) ApplyEntries(args AppendEntriesArgs){
 /***************** Leader Side *******************/
 
 
-func (n *Node) HandleAppendEntriesReply(followerID int, resp AppendEntriesReply){
+func (n *Node) HandleAppendEntriesReply(followerAddr string, resp AppendEntriesReply){
 	if resp.Term == n.CurrentTerm && n.Role == "Leader" {
-		if resp.Success && resp.Ack >= 
+		if resp.Success && resp.Ack >= n.ackedLength[followerAddr]{
+			n.sentLength[followerAddr] = resp.Ack
+			n.ackedLength[followerAddr] = resp.Ack
+			//CommitLogEntries
+		}else if n.sentLength[followerAddr] > 0{
+			n.sentLength[followerAddr] --
+			n.ReplicateLog(followerAddr)
+		}
+	}else if resp.Term > n.CurrentTerm{
+		n.CurrentTerm = resp.Term
+		n.Role = "Follower"
+		n.VotedFor = -1
+		n.CurrentLeader = -1
+		n.resetElectionTimer()
 	}
 }
 
@@ -119,7 +132,7 @@ func (n *Node) sendHeartbeat(peer string, args *AppendEntriesArgs) {
 	}
 }
 
-func (n *Node) startHeartbeat() {
+func (n *Node) StartHeartbeat() {
 	n.heartbeatTicker = time.NewTicker(HeartbeatInterval)
 
 	go func() {
