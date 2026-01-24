@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"Distributed-Key-Value-Store-with-Raft-Consensus/store"
 	"net/rpc"
 	"time"
 )
@@ -82,7 +83,16 @@ func (n *Node) ApplyEntries(args AppendEntriesArgs){
 
 	if args.LeaderCommit > n.CommitIdx {
 		for i:= n.CommitIdx; i<= args.LeaderCommit-1; i++{
-			n.Store.Apply(n.Log[i])
+			raftEntry := n.Log[i]
+
+			storeEntry := store.LogEntry{
+				Term: raftEntry.Term,
+				Command: raftEntry.Command,
+				Key:     raftEntry.Key,
+				Value:   raftEntry.Value,
+			}
+
+			n.Store.Apply(storeEntry)
 		}
 		n.CommitIdx = args.LeaderCommit
 	}
@@ -95,14 +105,17 @@ func (n *Node) ApplyEntries(args AppendEntriesArgs){
 
 func (n *Node) HandleAppendEntriesReply(followerAddr string, resp AppendEntriesReply){
 	if resp.Term == n.CurrentTerm && n.Role == "Leader" {
+
 		if resp.Success && resp.Ack >= n.ackedLength[followerAddr]{
 			n.sentLength[followerAddr] = resp.Ack
 			n.ackedLength[followerAddr] = resp.Ack
-			//CommitLogEntries
+			n.CommitLogEntries()
+
 		}else if n.sentLength[followerAddr] > 0{
 			n.sentLength[followerAddr] --
 			n.ReplicateLog(followerAddr)
 		}
+
 	}else if resp.Term > n.CurrentTerm{
 		n.CurrentTerm = resp.Term
 		n.Role = "Follower"
@@ -110,6 +123,47 @@ func (n *Node) HandleAppendEntriesReply(followerAddr string, resp AppendEntriesR
 		n.CurrentLeader = -1
 		n.resetElectionTimer()
 	}
+}
+
+func (n *Node) CommitLogEntries(){
+	if n.Role != "Leader"{
+		return
+	}
+	minAcks := (len(n.Peers) + 1) / 2 + 1
+	ready := []int{}
+	for i:= range(n.Log){
+		acksLen := 1 // Count Leader log
+		for j:= range(n.ackedLength){
+			if n.ackedLength[j] >= i+1 {
+				acksLen ++
+			}
+		}
+		if acksLen >= minAcks{
+			ready = append(ready, i)
+		}
+	}
+	maxReady := -1
+	for i:= range(ready){
+		if ready[i] > maxReady{
+			maxReady = ready[i]
+		}
+	}
+	if len(ready) > 0 && maxReady > n.CommitIdx && n.Log[maxReady -1].Term == n.CurrentTerm{
+		for i:= n.CommitIdx;i<= maxReady -1; i++{
+			raftEntry := n.Log[i]
+
+			storeEntry := store.LogEntry{
+				Term: raftEntry.Term,
+				Command: raftEntry.Command,
+				Key:     raftEntry.Key,
+				Value:   raftEntry.Value,
+			}
+
+			n.Store.Apply(storeEntry)
+		}
+		n.CommitIdx = maxReady 
+	}
+
 }
 
 
