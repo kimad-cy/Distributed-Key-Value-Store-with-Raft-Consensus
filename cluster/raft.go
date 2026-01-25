@@ -12,26 +12,33 @@ func (n *Node) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply)
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
+
 	// Reject if leader's term is older
 	if args.Term < n.CurrentTerm {
 		reply.Term = n.CurrentTerm
 		reply.Success = false
 		return nil
 	}
+
+	n.resetElectionTimer()
 	
 	if args.Term > n.CurrentTerm{
 		n.CurrentTerm = args.Term
 		n.VotedFor = -1
 	}
 	
-	n.Role = "Follower"
-	n.CurrentLeader = args.LeaderID
+
+    n.CurrentLeader = args.LeaderID
+    n.Role = "Follower"
 	
 	if len(args.Entries) == 0 {
-		fmt.Printf("[Node %d] Received heartbeat from %d\n", n.ID, args.LeaderID)
+		// Heartbeat
 		n.resetElectionTimer()   
 		reply.Success = true
 		reply.Term = n.CurrentTerm
+		if n.ID != args.LeaderID { 
+			fmt.Printf("[Node %d] Received heartbeat from %d\n", n.ID, args.LeaderID)
+		}
 		return nil
 	}
 
@@ -72,7 +79,7 @@ func (n *Node) ApplyEntries(args AppendEntriesArgs){
 
 	if args.PrevLogIndex+ len(args.Entries) > len(n.Log) {
 		start:= max(0,len(n.Log) - args.PrevLogIndex)
-		for i:=start; i<= len(args.Entries)-1; i++{
+		for i:=start; i< len(args.Entries); i++{
 			n.Log = append(n.Log, args.Entries[i])
 		}
 

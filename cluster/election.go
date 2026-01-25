@@ -9,50 +9,31 @@ import (
 /************************ Election Timers **************************************/
 
 func randomElectionTimeout() time.Duration {
-    return time.Duration(150+rand.Intn(150)) * time.Millisecond
+    return time.Duration(500+rand.Intn(300)) * time.Millisecond
 }
 
 func (n *Node) startElectionTimer() {
-	if n.ElectionTimer != nil {
-        n.ElectionTimer.Stop()
-    }
-
-    timeout := randomElectionTimeout()
-
-    
-    n.ElectionTimer = time.AfterFunc(timeout, func() {
-        n.mu.Lock()
-
-		// If already leader, do nothing
-		if n.Role == "Leader" {
-			n.mu.Unlock()
-			return
-		}
-
-		n.mu.Unlock()
-		fmt.Printf("[Node %d] election timeout\n", n.ID)
-
-		go n.StartElection()
-    })
+    n.resetElectionTimer()
 }
 
 
 func (n *Node) resetElectionTimer() {
-    timeout := randomElectionTimeout()
-
-    if n.ElectionTimer == nil {
-        n.ElectionTimer = time.NewTimer(timeout)
-        return
+    if n.ElectionTimer != nil {
+        n.ElectionTimer.Stop()
     }
-
-    if !n.ElectionTimer.Stop() {
-        select {
-        case <-n.ElectionTimer.C:
-        default:
+    
+    n.ElectionTimer = time.AfterFunc(randomElectionTimeout(), func() {
+        n.mu.Lock()
+        // If already leader, do nothing
+        if n.Role == "Leader" {
+            n.mu.Unlock()
+            return
         }
-    }
-
-    n.ElectionTimer.Reset(timeout)
+        n.mu.Unlock()
+        
+        fmt.Printf("[Node %d] election timeout\n", n.ID)
+        go n.StartElection()
+    })
 }
 
 

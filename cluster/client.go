@@ -28,6 +28,37 @@ func (n *Node) HandleClientCommand(cmd string, key string, value interface{}){
     }
 }
 
+func (n *Node) HandleClientCommandRPC(args *ClientCommandArgs, reply *ClientCommandReply) error {
+    n.mu.Lock()
+    defer n.mu.Unlock()
+    
+    if n.Role != "Leader" {
+        reply.Success = false
+        return fmt.Errorf("not leader")
+    }
+    
+    entry := LogEntry{
+        Term:    n.CurrentTerm,
+        Command: args.Command,
+        Key:     args.Key,
+        Value:   args.Value,
+    }
+    
+    n.Log = append(n.Log, entry)
+    n.ackedLength[n.Address] = len(n.Log)
+    
+    reply.Success = true
+    
+    // Trigger replication
+    go func() {
+        for _, peer := range n.Peers {
+            n.ReplicateLog(peer)
+        }
+    }()
+    
+    return nil
+}
+
 func (n *Node) ForwardToLeader(cmd string, key string, value interface{}) error {
     n.mu.RLock()
     leaderID := n.CurrentLeader

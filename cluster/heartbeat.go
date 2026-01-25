@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -26,6 +27,7 @@ func (n *Node) StartHeartbeat() {
 			n.mu.Unlock()
 
 			for _, peer := range n.Peers {
+				fmt.Printf("[Node %d] sent heartbeat to %s\n", n.ID, peer)
 				go n.ReplicateLog(peer)
 			}
 		}
