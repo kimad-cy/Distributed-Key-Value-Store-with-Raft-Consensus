@@ -38,13 +38,23 @@ func (n *Node) startElectionTimer() {
 
 
 func (n *Node) resetElectionTimer() {
-	if n.ElectionTimer == nil {
-		n.startElectionTimer()
-		return
-	}
-	n.ElectionTimer.Stop()
-	n.ElectionTimer.Reset(randomElectionTimeout())
+    timeout := randomElectionTimeout()
+
+    if n.ElectionTimer == nil {
+        n.ElectionTimer = time.NewTimer(timeout)
+        return
+    }
+
+    if !n.ElectionTimer.Stop() {
+        select {
+        case <-n.ElectionTimer.C:
+        default:
+        }
+    }
+
+    n.ElectionTimer.Reset(timeout)
 }
+
 
 /**************************************************************/
 
@@ -53,31 +63,37 @@ func (n *Node) StartElection() {
 	n.CurrentTerm++
 	n.Role = "Candidate"
 	n.VotedFor = n.ID
-	n.VotesReceived = []int{1}
-	
+	n.VotesReceived = make(map[string]bool)
+	n.VotesReceived[n.Address] = true
+
 	lastLogTerm := 0
 	if len(n.Log) > 0{
 		lastLogTerm = n.Log[len(n.Log)-1].Term
 	}
 
+	currentTerm := n.CurrentTerm 
 	n.mu.Unlock()
 
 	fmt.Printf("[Node %d] starting election (term %d)\n", n.ID, n.CurrentTerm)
+	n.resetElectionTimer()
 
 	args := &RequestVoteArgs{
-		Term:         n.CurrentTerm,
+		Term:         currentTerm,
 		CandidateID:  n.ID,
 		LastLogIndex: len(n.Log),
 		LastLogTerm:  lastLogTerm,
 	}
 
 	for _, peer := range n.Peers {
+		if peer == n.Address {
+            continue  // Skip self
+        }
 		go func(p string) {
 			reply, err := n.sendRequestVote(p, args)
 			if err != nil {
 				return
 			}
-			n.processVoteReply(reply)
+			n.processVoteReply(p,reply)
 		}(peer)
 	}
 }
@@ -104,6 +120,7 @@ func (n *Node) RequestVote(args *RequestVoteArgs,reply *RequestVoteReply,) error
 		n.Role = "Follower"
 		n.VotedFor = -1
 		n.CurrentLeader = -1 
+		n.resetElectionTimer()
 	}
 
 	// Check log freshness
@@ -119,6 +136,7 @@ func (n *Node) RequestVote(args *RequestVoteArgs,reply *RequestVoteReply,) error
 	if (n.VotedFor == -1 || n.VotedFor == args.CandidateID) && upToDate {
 		n.VotedFor = args.CandidateID
 		reply.VoteGranted = true
+		n.resetElectionTimer()  
 		fmt.Printf("[Node %d] voted for %d\n", n.ID, args.CandidateID)
 	} else {
 		reply.VoteGranted = false
@@ -129,7 +147,7 @@ func (n *Node) RequestVote(args *RequestVoteArgs,reply *RequestVoteReply,) error
 }
 
 
-func (n *Node) processVoteReply(reply *RequestVoteReply) {
+func (n *Node) processVoteReply(peer string, reply *RequestVoteReply) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -140,6 +158,7 @@ func (n *Node) processVoteReply(reply *RequestVoteReply) {
 		n.VotedFor = -1
 		n.CurrentLeader = -1
 		n.VotesReceived = nil
+		n.resetElectionTimer()
 		return
 	}
 
@@ -150,13 +169,21 @@ func (n *Node) processVoteReply(reply *RequestVoteReply) {
 
 	// Count granted votes
 	if reply.VoteGranted {
-		n.VotesReceived = append(n.VotesReceived, 1) 
-		fmt.Printf("[Node %d] received vote (%d total)\n", n.ID, len(n.VotesReceived))
+		n.VotesReceived[peer] = true
 
 		// Majority check
-		if len(n.VotesReceived) >= (len(n.Peers)+1)/2+1 {
+		voterVotes := 0
+		for voter := range n.VotesReceived {
+			if n.VotesReceived[voter] {
+				voterVotes++
+			}
+		}
+		fmt.Printf("[Node %d] received vote (%d total)\n", n.ID, voterVotes)
+
+		if voterVotes >= (len(n.Peers)+1)/2+1{
 			n.becomeLeader()
 		}
+
 	}
 }
 
@@ -166,8 +193,11 @@ func (n *Node) becomeLeader() {
 
 	for _, peer := range n.Peers {
         n.ackedLength[peer] = 0
-        n.sentLength[peer] = len(n.Log)
+        n.sentLength[peer] = 0
     }
+
+	n.ackedLength[n.Address] = len(n.Log)
+    n.sentLength[n.Address] = len(n.Log)
 
 	if n.ElectionTimer != nil {
 		n.ElectionTimer.Stop()
@@ -179,5 +209,8 @@ func (n *Node) becomeLeader() {
 		go n.ReplicateLog(peer)
 	}
 
+	if n.heartbeatTicker != nil {
+		n.heartbeatTicker.Stop()
+	}
 	n.StartHeartbeat()
 }

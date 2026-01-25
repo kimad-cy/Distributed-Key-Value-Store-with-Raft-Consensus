@@ -49,7 +49,7 @@ func (n *Node) Start() error {
 	return nil
 }
 
-const RPCTimeout = 100 * time.Millisecond
+const RPCTimeout = 500 * time.Millisecond
 
 func callRPCWithContext(ctx context.Context, client *rpc.Client, serviceMethod string, args interface{}, reply interface{}) error {
     call := client.Go(serviceMethod, args, reply, make(chan *rpc.Call, 1))

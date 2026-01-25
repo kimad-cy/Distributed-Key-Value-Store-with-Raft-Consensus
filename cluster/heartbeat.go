@@ -16,7 +16,9 @@ func (n *Node) StartHeartbeat() {
 		for range n.heartbeatTicker.C {
 			n.mu.Lock()
 			if n.Role != "Leader" {
-				n.heartbeatTicker.Stop()
+				if n.heartbeatTicker != nil{
+					n.heartbeatTicker.Stop()
+				}
 				n.mu.Unlock()
 				return
 			}

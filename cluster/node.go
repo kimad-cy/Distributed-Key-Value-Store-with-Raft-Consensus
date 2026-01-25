@@ -26,7 +26,7 @@ type Node struct {
 	lastApplied int
 	
 	//Leader Election
-	VotesReceived []int
+	VotesReceived map[string]bool
 	ElectionTimer *time.Timer
 
 	//Heartbeats
@@ -38,6 +38,8 @@ type Node struct {
 
 	//State Machine
 	Store     *store.KVStore 
+
+	PeerIDToAddr map[int]string  // Maps node ID to address
 
 	//Concurrency
 	mu sync.RWMutex
@@ -63,3 +65,26 @@ func NewNode(id int, address string , peers []string) (*Node){
 }
 
 
+func (n *Node) GetRole() string {
+    n.mu.RLock()
+    defer n.mu.RUnlock()
+    return n.Role
+}
+
+func (n *Node) GetCurrentTerm() int {
+    n.mu.RLock()
+    defer n.mu.RUnlock()
+    return n.CurrentTerm
+}
+
+func (n *Node) GetKVSnapshot() map[string]interface{} {
+    return n.Store.Snapshot() 
+}
+
+func (n *Node) GetLog() []LogEntry {
+    n.mu.RLock()
+    defer n.mu.RUnlock()
+    logCopy := make([]LogEntry, len(n.Log))
+    copy(logCopy, n.Log)
+    return logCopy
+}

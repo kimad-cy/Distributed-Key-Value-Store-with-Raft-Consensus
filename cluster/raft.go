@@ -18,23 +18,34 @@ func (n *Node) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply)
 		reply.Success = false
 		return nil
 	}
+	
 	if args.Term > n.CurrentTerm{
 		n.CurrentTerm = args.Term
-    	n.VotedFor = -1
-		n.Role = "Follower"
-		n.CurrentLeader = args.LeaderID
+		n.VotedFor = -1
 	}
-    
-	// Reset election timer
-	n.resetElectionTimer()
+	
+	n.Role = "Follower"
+	n.CurrentLeader = args.LeaderID
+	
+	if len(args.Entries) == 0 {
+		fmt.Printf("[Node %d] Received heartbeat from %d\n", n.ID, args.LeaderID)
+		n.resetElectionTimer()   
+		reply.Success = true
+		reply.Term = n.CurrentTerm
+		return nil
+	}
 
 	if (args.PrevLogIndex <= len(n.Log)) && (args.PrevLogIndex == 0 || args.PrevLogTerm == n.Log[args.PrevLogIndex-1].Term){
-			n.ApplyEntries(*args)
-			reply.Term = n.CurrentTerm
-			reply.Success = true
-			reply.Ack = args.PrevLogIndex + len(args.Entries)
-			return nil
-		}
+		// Reset election timer
+		n.resetElectionTimer()
+
+		n.ApplyEntries(*args)
+		reply.Term = n.CurrentTerm
+		reply.Success = true
+		reply.Ack = args.PrevLogIndex + len(args.Entries)
+		
+		return nil
+	}
 
 	reply.Term = n.CurrentTerm
 	reply.Success = false
@@ -44,9 +55,14 @@ func (n *Node) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply)
 func (n *Node) ApplyEntries(args AppendEntriesArgs){
 	if len(n.Log) > args.PrevLogIndex{
 		if len(args.Entries) > 0 {
-			index:= min(len(n.Log), args.PrevLogIndex + len(args.Entries)) - 1
-			if n.Log[index].Term != args.Entries[index-args.PrevLogIndex].Term {
-				n.Log = n.Log[0:args.PrevLogIndex]
+			for i := 0; i < len(args.Entries); i++ {
+				logIdx := args.PrevLogIndex + i
+				if logIdx < len(n.Log) {
+					if n.Log[logIdx].Term != args.Entries[i].Term {
+						n.Log = n.Log[:logIdx]
+						break
+					}
+				}
 			}
 		}else{
 			n.Log = n.Log[0:args.PrevLogIndex]
@@ -63,19 +79,19 @@ func (n *Node) ApplyEntries(args AppendEntriesArgs){
 	}
 
 	if args.LeaderCommit > n.CommitIdx {
-		for i:= n.CommitIdx; i<= args.LeaderCommit-1; i++{
-			raftEntry := n.Log[i]
+		for n.CommitIdx < args.LeaderCommit {
+        raftEntry := n.Log[n.CommitIdx]
 
-			storeEntry := store.LogEntry{
-				Term: raftEntry.Term,
-				Command: raftEntry.Command,
-				Key:     raftEntry.Key,
-				Value:   raftEntry.Value,
-			}
+        storeEntry := store.LogEntry{
+            Term: raftEntry.Term,
+            Command: raftEntry.Command,
+            Key: raftEntry.Key,
+            Value: raftEntry.Value,
+        }
 
-			n.Store.Apply(storeEntry)
-		}
-		n.CommitIdx = args.LeaderCommit
+        n.Store.Apply(storeEntry)
+        n.CommitIdx++
+    }
 	}
 
 }
@@ -154,7 +170,9 @@ func (n *Node) HandleAppendEntriesReply(followerAddr string, resp AppendEntriesR
 
 		}else if n.sentLength[followerAddr] > 0{
 			n.sentLength[followerAddr] --
-			n.ReplicateLog(followerAddr)
+			go func(addr string) {
+                n.ReplicateLog(addr)
+            }(followerAddr)
 		}
 
 	}else if resp.Term > n.CurrentTerm{
@@ -166,45 +184,54 @@ func (n *Node) HandleAppendEntriesReply(followerAddr string, resp AppendEntriesR
 	}
 }
 
-func (n *Node) CommitLogEntries(){
-	if n.Role != "Leader"{
-		return
-	}
-	minAcks := (len(n.Peers) + 1) / 2 + 1
-	ready := []int{}
-	for i:= range(n.Log){
-		acksLen := 1 // Count Leader log
-		for j:= range(n.ackedLength){
-			if n.ackedLength[j] >= i+1 {
-				acksLen ++
-			}
-		}
-		if acksLen >= minAcks{
-			ready = append(ready, i)
-		}
-	}
-	maxReady := -1
-	for i:= range(ready){
-		if ready[i] > maxReady{
-			maxReady = ready[i]
-		}
-	}
-	if len(ready) > 0 && maxReady > n.CommitIdx && n.Log[maxReady].Term == n.CurrentTerm{
-		for i:= n.CommitIdx;i<= maxReady -1; i++{
-			raftEntry := n.Log[i]
+func (n *Node) CommitLogEntries() {
+    if n.Role != "Leader" {
+        return
+    }
+    
+    minAcks := (len(n.Peers) + 1) / 2 + 1
 
-			storeEntry := store.LogEntry{
-				Term: raftEntry.Term,
-				Command: raftEntry.Command,
-				Key:     raftEntry.Key,
-				Value:   raftEntry.Value,
-			}
+	//fmt.Printf("[Node %d] CommitLogEntries: checking %d log entries, CommitIdx=%d, minAcks=%d\n", 
+      //  n.ID, len(n.Log), n.CommitIdx, minAcks)
+    
+    // Debug: print ackedLength
+    //fmt.Printf("[Node %d] ackedLength: %+v\n", n.ID, n.ackedLength)
+    
+    for i := len(n.Log) - 1; i >= n.CommitIdx; i-- {
+        acksLen := 0
+        
+        for _, ackedIdx := range n.ackedLength {
+            if ackedIdx > i {  
+                acksLen++
+				//fmt.Printf("[Node %d]   Entry %d: peer %s has acked up to %d\n", 
+                   // n.ID, i, addr, ackedIdx)
+            }
+        }
 
-			n.Store.Apply(storeEntry)
-		}
-		n.CommitIdx = maxReady 
-	}
+		//fmt.Printf("[Node %d]   Entry %d: acksLen=%d, term=%d, currentTerm=%d\n", 
+            //n.ID, i, acksLen, n.Log[i].Term, n.CurrentTerm)
+        
+        // If we have majority and it's from current term, commit
+        if acksLen >= minAcks && n.Log[i].Term == n.CurrentTerm {
+			fmt.Printf("[Node %d] COMMITTING entries %d to %d\n", n.ID, n.CommitIdx, i)
 
+            // Apply all entries from CommitIdx to i
+            for j := n.CommitIdx; j <= i; j++ {
+                raftEntry := n.Log[j]
+
+                storeEntry := store.LogEntry{
+                    Term:    raftEntry.Term,
+                    Command: raftEntry.Command,
+                    Key:     raftEntry.Key,
+                    Value:   raftEntry.Value,
+                }
+
+                n.Store.Apply(storeEntry)
+				fmt.Printf("[Node %d] Applied entry %d: %s %s=%v\n", 
+                    n.ID, j, raftEntry.Command, raftEntry.Key, raftEntry.Value)
+            }
+            n.CommitIdx = i + 1
+            break  
+        }
+    }
 }
-
-
