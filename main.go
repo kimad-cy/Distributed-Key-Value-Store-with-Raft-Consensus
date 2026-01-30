@@ -19,7 +19,7 @@ func main() {
 
 
 	}
-
+	
 	for i, addr := range addresses {
 		peers := make([]string, 0)
 		for _, p := range addresses {
@@ -84,23 +84,28 @@ func main() {
 	time.Sleep(2 * time.Second)
 	StateOfCluster(nodes)
 
-	commands2 := []struct {
-		cmd   string
-		key   string
-		value interface{}
-	}{
-		{"SET", "x", 40},
-		{"SET", "w", 10},
-	}
-	for _, c := range commands2 {
-		fmt.Printf("Sending command %s %s=%v to leader %d\n", c.cmd, c.key, c.value, leader.ID)
-		leader.HandleClientCommand(c.cmd, c.key, c.value)
-		time.Sleep(100 * time.Millisecond)
-	}
+	// newAddr := "127.0.0.1:8004"
+	// newNode := cluster.NewNode(4, newAddr, addresses)
+	// newNode.CurrentLeader = leader.GetID()
+	// nodes = append(nodes, newNode)
 
-	// Wait for replication & commits
-	time.Sleep(2 * time.Second)
-	StateOfCluster(nodes)
+	// commands2 := []struct {
+	// 	cmd   string
+	// 	key   string
+	// 	value interface{}
+	// }{
+	// 	{"SET", "x", 40},
+	// 	{"SET", "w", 10},
+	// }
+	// for _, c := range commands2 {
+	// 	fmt.Printf("Sending command %s %s=%v to leader %d\n", c.cmd, c.key, c.value, leader.ID)
+	// 	leader.HandleClientCommand(c.cmd, c.key, c.value)
+	// 	time.Sleep(100 * time.Millisecond)
+	// }
+
+	// // Wait for replication & commits
+	// time.Sleep(2 * time.Second)
+	// StateOfCluster(nodes)
 	
 }
 

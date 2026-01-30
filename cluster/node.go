@@ -64,6 +64,9 @@ func NewNode(id int, address string , peers []string) (*Node){
 	return &node
 }
 
+func (n *Node) GetID() int {
+    return n.ID
+}
 
 func (n *Node) GetRole() string {
     n.mu.RLock()
