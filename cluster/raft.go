@@ -12,7 +12,6 @@ func (n *Node) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply)
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-
 	// Reject if leader's term is older
 	if args.Term < n.CurrentTerm {
 		reply.Term = n.CurrentTerm
@@ -36,6 +35,8 @@ func (n *Node) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply)
 		n.resetElectionTimer()   
 		reply.Success = true
 		reply.Term = n.CurrentTerm
+		reply.Ack = len(n.Log)
+		n.ApplyEntries(*args)
 		if n.ID != args.LeaderID { 
 			fmt.Printf("[Node %d] Received heartbeat from %d\n", n.ID, args.LeaderID)
 		}
@@ -71,22 +72,24 @@ func (n *Node) ApplyEntries(args AppendEntriesArgs){
 					}
 				}
 			}
-		}else{
-			n.Log = n.Log[0:args.PrevLogIndex]
 		}
-		
 	}
 
 	if args.PrevLogIndex+ len(args.Entries) > len(n.Log) {
 		start:= max(0,len(n.Log) - args.PrevLogIndex)
-		for i:=start; i< len(args.Entries); i++{
+		for i:=start; i<len(args.Entries); i++{
 			n.Log = append(n.Log, args.Entries[i])
 		}
 
 	}
 
 	if args.LeaderCommit > n.CommitIdx {
-		for n.CommitIdx < args.LeaderCommit {
+		indexOfLastNewEntry := args.PrevLogIndex + len(args.Entries)
+		if len(args.Entries) == 0 {
+             indexOfLastNewEntry = len(n.Log)
+        }
+		commitUpTo := min(args.LeaderCommit, indexOfLastNewEntry)
+		for n.CommitIdx < commitUpTo {
         raftEntry := n.Log[n.CommitIdx]
 
         storeEntry := store.LogEntry{
@@ -101,6 +104,11 @@ func (n *Node) ApplyEntries(args AppendEntriesArgs){
     }
 	}
 
+}
+
+func min(a, b int) int {
+    if a < b { return a }
+    return b
 }
 
 /*****************************Leader Side ************************************/
@@ -197,12 +205,6 @@ func (n *Node) CommitLogEntries() {
     }
     
     minAcks := (len(n.Peers) + 1) / 2 + 1
-
-	//fmt.Printf("[Node %d] CommitLogEntries: checking %d log entries, CommitIdx=%d, minAcks=%d\n", 
-      //  n.ID, len(n.Log), n.CommitIdx, minAcks)
-    
-    // Debug: print ackedLength
-    //fmt.Printf("[Node %d] ackedLength: %+v\n", n.ID, n.ackedLength)
     
     for i := len(n.Log) - 1; i >= n.CommitIdx; i-- {
         acksLen := 0
@@ -210,13 +212,8 @@ func (n *Node) CommitLogEntries() {
         for _, ackedIdx := range n.ackedLength {
             if ackedIdx > i {  
                 acksLen++
-				//fmt.Printf("[Node %d]   Entry %d: peer %s has acked up to %d\n", 
-                   // n.ID, i, addr, ackedIdx)
             }
         }
-
-		//fmt.Printf("[Node %d]   Entry %d: acksLen=%d, term=%d, currentTerm=%d\n", 
-            //n.ID, i, acksLen, n.Log[i].Term, n.CurrentTerm)
         
         // If we have majority and it's from current term, commit
         if acksLen >= minAcks && n.Log[i].Term == n.CurrentTerm {

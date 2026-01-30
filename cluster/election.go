@@ -53,9 +53,11 @@ func (n *Node) StartElection() {
 	}
 
 	currentTerm := n.CurrentTerm 
+	myAddress := n.Address  
+    peers := n.Peers
 	n.mu.Unlock()
 
-	fmt.Printf("[Node %d] starting election (term %d)\n", n.ID, n.CurrentTerm)
+	fmt.Printf("[Node %d] starting election (term %d), sending to peers: %v\n", n.ID, currentTerm, peers)
 	n.resetElectionTimer()
 
 	args := &RequestVoteArgs{
@@ -66,14 +68,17 @@ func (n *Node) StartElection() {
 	}
 
 	for _, peer := range n.Peers {
-		if peer == n.Address {
+		if peer == myAddress {
+			fmt.Print("Shouldnt request to self!!!!!!")
             continue  // Skip self
         }
 		go func(p string) {
+			fmt.Printf("[Node %d] Sending RequestVote to %s\n", n.ID, p)
 			reply, err := n.sendRequestVote(p, args)
 			if err != nil {
 				return
 			}
+			fmt.Printf("[Node %d] Received vote reply from %s: granted=%v\n", n.ID, p, reply.VoteGranted)
 			n.processVoteReply(p,reply)
 		}(peer)
 	}
@@ -94,6 +99,13 @@ func (n *Node) RequestVote(args *RequestVoteArgs,reply *RequestVoteReply,) error
 		reply.VoteGranted = false
 		return nil
 	}
+
+	// If we're in the same term and we know there's a valid leader, reject
+	if args.Term == n.CurrentTerm && n.CurrentLeader != -1 {
+        reply.Term = n.CurrentTerm
+        reply.VoteGranted = false
+        return nil
+    }
 
 	// If term is newer, update self
 	if args.Term > n.CurrentTerm {
@@ -161,7 +173,8 @@ func (n *Node) processVoteReply(peer string, reply *RequestVoteReply) {
 		}
 		fmt.Printf("[Node %d] received vote (%d total)\n", n.ID, voterVotes)
 
-		if voterVotes >= (len(n.Peers)+1)/2+1{
+		majority := (len(n.Peers) + 1 + 1) / 2
+		if voterVotes >= majority{
 			n.becomeLeader()
 		}
 
@@ -174,7 +187,7 @@ func (n *Node) becomeLeader() {
 
 	for _, peer := range n.Peers {
         n.ackedLength[peer] = 0
-        n.sentLength[peer] = 0
+        n.sentLength[peer] = len(n.Log)
     }
 
 	n.ackedLength[n.Address] = len(n.Log)

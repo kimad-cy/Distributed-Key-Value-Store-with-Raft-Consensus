@@ -34,7 +34,11 @@ func (n *Node) sendRequestVote(peerAddr string,args *RequestVoteArgs,) (*Request
 
 
 func (n *Node) Start() error {
-	rpc.Register(n)
+    server := rpc.NewServer()
+    err := server.Register(n)
+    if err != nil {
+        return err
+    }
 
 	listener, err := net.Listen("tcp", n.Address)
 	if err != nil {
@@ -42,7 +46,7 @@ func (n *Node) Start() error {
 	}
 
 	fmt.Printf("[Node %d] listening on %s\n", n.ID, n.Address)
-	go rpc.Accept(listener)
+	go server.Accept(listener)
 
 	n.startElectionTimer()
 	
