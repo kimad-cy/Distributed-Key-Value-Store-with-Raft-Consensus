@@ -60,6 +60,7 @@ func NewNode(id int, address string , peers []string) (*Node){
 		Store: store.NewKVStore(),
 		sentLength: make(map[string]int), 
         ackedLength: make(map[string]int),
+		PeerIDToAddr:  make(map[int]string),
 	}
 	return &node
 }

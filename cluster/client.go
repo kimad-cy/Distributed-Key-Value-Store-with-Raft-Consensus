@@ -62,18 +62,11 @@ func (n *Node) HandleClientCommandRPC(args *ClientCommandArgs, reply *ClientComm
 func (n *Node) ForwardToLeader(cmd string, key string, value interface{}) error {
     n.mu.RLock()
     leaderID := n.CurrentLeader
+    leaderAddr := n.PeerIDToAddr[leaderID]
     n.mu.RUnlock()
 
-    if leaderID == -1 {
+    if leaderID == -1 || leaderAddr == "" {
         return fmt.Errorf("no leader currently known, try again later")
-    }
-
-    var leaderAddr string
-    // for _, addr := range n.Peers {
-    //     // find the address of the leader 
-    // }
-    if leaderAddr == "" {
-        return fmt.Errorf("leader address not found")
     }
 
     // Prepare a request object
@@ -87,7 +80,7 @@ func (n *Node) ForwardToLeader(cmd string, key string, value interface{}) error 
     // Call leader via RPC
     client, err := rpc.Dial("tcp", leaderAddr)
     if err != nil {
-        return fmt.Errorf("failed to connect to leader: %v", err)
+        return fmt.Errorf("failed to connect to leader at %s: %v", leaderAddr, err)    
     }
     defer client.Close()
 

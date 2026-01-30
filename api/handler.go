@@ -55,14 +55,22 @@ func (h *Handlers) SetKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// im consideriing the node is leader (change later)
+    role := h.Node.GetRole()
 
-	h.Node.Store.Set(req.Key, req.Value)
+    if role == "Leader" {
+        // If we are leader, process it locally
+        h.Node.HandleClientCommand("SET", req.Key, req.Value)
+    } else {
+        // If we are follower, forward it!
+        err := h.Node.ForwardToLeader("SET", req.Key, req.Value)
+        if err != nil {
+            http.Error(w, err.Error(), http.StatusServiceUnavailable)
+            return
+        }
+    }
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"status": "ok",
-	})
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
 
 // GET /cluster/status

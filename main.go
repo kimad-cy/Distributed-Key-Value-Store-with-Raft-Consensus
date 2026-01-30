@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"time"
 
+	"Distributed-Key-Value-Store-with-Raft-Consensus/api"
 	"Distributed-Key-Value-Store-with-Raft-Consensus/cluster"
 )
 
@@ -30,6 +32,22 @@ func main() {
 		fmt.Printf("Node %d at %s has peers: %v\n", i+1, addr, peers)
 		node := cluster.NewNode(i+1, addr, peers)
 		nodes = append(nodes, node)
+
+		apiPort := fmt.Sprintf(":900%d", i+1) 
+		router := api.NewRouter(node)
+		
+		go func(p string, h http.Handler) {
+			fmt.Printf("[Node %d] API listening on %s\n", node.ID, p)
+			if err := http.ListenAndServe(p, h); err != nil {
+				fmt.Printf("API Server failed: %v\n", err)
+			}
+		}(apiPort, router)
+	}
+	
+	for _, n := range nodes {
+		for i, addr := range addresses {
+			n.PeerIDToAddr[i+1] = addr // Map Node ID (1, 2, 3) to its Address
+		}
 	}
 
 	// Start all nodes
