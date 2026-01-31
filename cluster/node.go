@@ -41,6 +41,10 @@ type Node struct {
 
 	PeerIDToAddr map[int]string  // Maps node ID to address
 
+	//Snapshotting
+	LastIncludedIndex int // The index of the last entry in the snapshot
+    LastIncludedTerm  int  // The term of that entry
+
 	//Concurrency
 	mu sync.RWMutex
 }

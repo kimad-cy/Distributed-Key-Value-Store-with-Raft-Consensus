@@ -56,7 +56,7 @@ func (s *KVStore) Apply(entry LogEntry) {
 }
 
 
-// For debugging/log compaction (implement later)
+// Log compaction
 func (s *KVStore) Snapshot() map[string]interface{} {
     s.mu.RLock()
     defer s.mu.RUnlock()
