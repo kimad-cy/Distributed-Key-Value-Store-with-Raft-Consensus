@@ -11,10 +11,14 @@ func (n *Node) Persist() {
         CurrentTerm int
         VotedFor    int
         Log         []LogEntry
+		LastIncludedIndex int
+        LastIncludedTerm  int
     }{
         CurrentTerm: n.CurrentTerm,
         VotedFor:    n.VotedFor,
         Log:         n.Log,
+		LastIncludedIndex: n.LastIncludedIndex,
+        LastIncludedTerm:  n.LastIncludedTerm,
     }
 
     filename := fmt.Sprintf("node_%d_state.json", n.ID)
@@ -24,7 +28,7 @@ func (n *Node) Persist() {
     json.NewEncoder(file).Encode(data)
 }
 
-func (n *Node) readPersist() {
+func (n *Node) ReadPersist() {
     filename := fmt.Sprintf("node_%d_state.json", n.ID)
     file, err := os.Open(filename)
     if err != nil {
@@ -36,10 +40,17 @@ func (n *Node) readPersist() {
         CurrentTerm int
         VotedFor    int
         Log         []LogEntry
+		LastIncludedIndex int
+        LastIncludedTerm  int
     }
     if err := json.NewDecoder(file).Decode(&data); err == nil {
+        n.mu.Lock()
         n.CurrentTerm = data.CurrentTerm
         n.VotedFor = data.VotedFor
         n.Log = data.Log
+        n.LastIncludedIndex = data.LastIncludedIndex
+        n.LastIncludedTerm = data.LastIncludedTerm
+        n.CommitIdx = n.LastIncludedIndex
+        n.mu.Unlock()
     }
 }

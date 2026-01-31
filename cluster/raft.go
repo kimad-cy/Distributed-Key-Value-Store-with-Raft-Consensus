@@ -39,7 +39,7 @@ func (n *Node) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply)
 		reply.Ack = len(n.Log)
 		n.ApplyEntries(*args)
 		if n.ID != args.LeaderID { 
-			fmt.Printf("[Node %d] Received heartbeat from %d\n", n.ID, args.LeaderID)
+			//fmt.Printf("[Node %d] Received heartbeat from %d\n", n.ID, args.LeaderID)
 		}
 		return nil
 	}

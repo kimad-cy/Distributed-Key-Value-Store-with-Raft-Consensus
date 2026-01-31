@@ -26,11 +26,11 @@ func (n *Node) TakeSnapshot() {
     n.Log = newLog
 
     // Save to disk
-    n.persistSnapshot(snapshotData)
+    n.PersistSnapshot(snapshotData)
     fmt.Printf("[Node %d] Snapshot taken up to index %d\n", n.ID, n.LastIncludedIndex)
 }
 
-func (n *Node) persistSnapshot(data map[string]interface{}) {
+func (n *Node) PersistSnapshot(data map[string]interface{}) {
     filename := fmt.Sprintf("snapshot-%d.json", n.ID)
     file, err := os.Create(filename)
     if err != nil {
@@ -41,7 +41,7 @@ func (n *Node) persistSnapshot(data map[string]interface{}) {
     json.NewEncoder(file).Encode(data)
 }
 
-func (n *Node) readSnapshot() {
+func (n *Node) ReadSnapshot() {
     filename := fmt.Sprintf("snapshot-%d.json", n.ID)
     file, err := os.Open(filename)
     if err != nil {
