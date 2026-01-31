@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"time"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"Distributed-Key-Value-Store-with-Raft-Consensus/api"
 	"Distributed-Key-Value-Store-with-Raft-Consensus/cluster"
@@ -16,10 +18,7 @@ func main() {
 		"127.0.0.1:8001",
 		"127.0.0.1:8002",
 		"127.0.0.1:8003",
-		//"127.0.0.1:8004",
-		//"127.0.0.1:8005",
-
-
+		"127.0.0.1:8004",
 	}
 	
 	for i, addr := range addresses {
@@ -31,6 +30,9 @@ func main() {
 		}
 		fmt.Printf("Node %d at %s has peers: %v\n", i+1, addr, peers)
 		node := cluster.NewNode(i+1, addr, peers)
+
+		node.ReadPersist()
+
 		nodes = append(nodes, node)
 
 		apiPort := fmt.Sprintf(":900%d", i+1) 
@@ -58,49 +60,48 @@ func main() {
 		}
 	}
 
-	// Give nodes some time to start
-	time.Sleep(1*time.Second)
+	// // Give nodes some time to start
+	// time.Sleep(1*time.Second)
 
-	// Wait for leader election
-	fmt.Println("Waiting for leader election...")
-	time.Sleep(3 * time.Second) // election timeout > 150-300ms
+	// // Wait for leader election
+	// fmt.Println("Waiting for leader election...")
+	// time.Sleep(3 * time.Second) // election timeout > 150-300ms
 
-	var leader *cluster.Node
-	for _, n := range nodes {
-		if n.GetRole() == "Leader" {
-		leader = n
-		break
-	}
+	// var leader *cluster.Node
+	// for _, n := range nodes {
+	// 	if n.GetRole() == "Leader" {
+	// 	leader = n
+	// 	break
+	// }
 
-	}
+	// }
 
-	if leader == nil {
-		fmt.Println("No leader elected!")
-		return
-	}
+	// if leader == nil {
+	// 	fmt.Println("No leader elected!")
+	// 	return
+	// }
 
-	fmt.Printf("Leader elected: Node %d (term %d)\n", leader.ID, leader.CurrentTerm)
+	// fmt.Printf("Leader elected: Node %d (term %d)\n", leader.ID, leader.CurrentTerm)
 
-	// Send some client commands to leader
-	commands := []struct {
-		cmd   string
-		key   string
-		value interface{}
-	}{
-		{"SET", "x", 10},
-		{"SET", "y", 20},
-		{"SET", "z", 30},
-	}
+	// // Send some client commands to leader
+	// commands := []struct {
+	// 	cmd   string
+	// 	key   string
+	// 	value interface{}
+	// }{
+	// 	{"SET", "x", 10},
+	// 	{"SET", "y", 20},
+	// 	{"SET", "z", 30},
+	// }
 
-	for _, c := range commands {
-		fmt.Printf("Sending command %s %s=%v to leader %d\n", c.cmd, c.key, c.value, leader.ID)
-		leader.HandleClientCommand(c.cmd, c.key, c.value)
-		time.Sleep(100 * time.Millisecond)
-	}
+	// for _, c := range commands {
+	// 	fmt.Printf("Sending command %s %s=%v to leader %d\n", c.cmd, c.key, c.value, leader.ID)
+	// 	leader.HandleClientCommand(c.cmd, c.key, c.value)
+	// 	time.Sleep(100 * time.Millisecond)
+	// }
 
 	// Wait for replication & commits
-	time.Sleep(2 * time.Second)
-	StateOfCluster(nodes)
+	
 
 	// newAddr := "127.0.0.1:8004"
 	// newNode := cluster.NewNode(4, newAddr, addresses)
@@ -124,7 +125,20 @@ func main() {
 	// // Wait for replication & commits
 	// time.Sleep(2 * time.Second)
 	// StateOfCluster(nodes)
-	
+
+	fmt.Println("Cluster is running. Press Ctrl+C to stop.")
+    
+    // Create a channel to receive OS signals
+	stop := make(chan os.Signal, 1)
+    
+
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	<-stop 
+
+	fmt.Println("\nShutting down cluster...")
+
+	StateOfCluster(nodes)
 }
 
 func StateOfCluster(nodes []*cluster.Node){

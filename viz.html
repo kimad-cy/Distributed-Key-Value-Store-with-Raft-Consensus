@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Raft Live Data Mesh</title>
+    <style>
+        :root {
+            --bg: #020617; --card: #0f172a; --text: #f8fafc;
+            --leader: #22c55e; --candidate: #eab308; --follower: #3b82f6;
+            --offline: #475569;
+        }
+        body { background: var(--bg); color: var(--text); font-family: 'JetBrains Mono', monospace; margin: 0; overflow: hidden; }
+        
+        #network-container { width: 100vw; height: 100vh; position: relative; }
+
+        /* The Nodes */
+        .node-wrapper {
+            position: absolute; width: 200px; transition: all 0.5s ease;
+            display: flex; flex-direction: column; align-items: center; z-index: 10;
+        }
+
+        .node-circle {
+            width: 80px; height: 80px; border-radius: 50%;
+            background: var(--card); border: 4px solid var(--offline);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: all 0.4s ease; position: relative;
+        }
+
+        /* Role Styles */
+        .Leader .node-circle { border-color: var(--leader); box-shadow: 0 0 20px rgba(34, 197, 94, 0.3); }
+        .Candidate .node-circle { border-color: var(--candidate); animation: pulse 1s infinite; }
+        .Follower .node-circle { border-color: var(--follower); }
+        .offline .node-circle { opacity: 0.3; }
+
+        /* The Live Store Table */
+        .live-store {
+            margin-top: 10px; width: 100%; background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+            font-size: 10px; max-height: 120px; overflow-y: auto; padding: 5px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .store-row { display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding: 2px 0; }
+        .key { color: #94a3b8; }
+        .val { color: var(--leader); font-weight: bold; }
+
+        /* SVG Background Connections */
+        #connections { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+        line { stroke: rgba(255,255,255,0.05); stroke-width: 1; }
+
+        @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.1); } }
+    </style>
+</head>
+<body>
+
+<div id="network-container">
+    <svg id="connections"></svg>
+</div>
+
+<script>
+    const ports = [9001, 9002, 9003, 9004];
+    const container = document.getElementById('network-container');
+    const svg = document.getElementById('connections');
+    
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    const radius = 280;
+
+    const nodeCoords = {};
+
+    // 1. Create Node Hubs
+    ports.forEach((port, i) => {
+        const angle = (i / ports.length) * Math.PI * 2;
+        const x = centerX + radius * Math.cos(angle);
+        const y = centerY + radius * Math.sin(angle);
+        nodeCoords[port] = { x, y };
+
+        const wrapper = document.createElement('div');
+        wrapper.id = `node-${port}`;
+        wrapper.className = 'node-wrapper';
+        wrapper.style.left = `${x - 100}px`;
+        wrapper.style.top = `${y - 100}px`;
+        
+        wrapper.innerHTML = `
+            <div class="node-circle">
+                <div style="font-size:10px; color:#64748b" id="role-${port}">WAIT</div>
+                <div style="font-weight:bold">N${port % 10}</div>
+                <div style="font-size:9px" id="term-${port}">T:0</div>
+            </div>
+            <div class="live-store" id="store-${port}">
+                <div style="text-align:center; color:#475569">Empty Store</div>
+            </div>
+        `;
+        container.appendChild(wrapper);
+    });
+
+    // 2. Draw Connection Mesh
+    ports.forEach((p1, i) => {
+        ports.forEach((p2, j) => {
+            if (i < j) {
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                line.setAttribute("x1", nodeCoords[p1].x); line.setAttribute("y1", nodeCoords[p1].y);
+                line.setAttribute("x2", nodeCoords[p2].x); line.setAttribute("y2", nodeCoords[p2].y);
+                svg.appendChild(line);
+            }
+        });
+    });
+
+    // 3. Connect and Update
+    function connect(port) {
+        const ws = new WebSocket(`ws://localhost:${port}/ws`);
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            const wrapper = document.getElementById(`node-${port}`);
+            const storeDiv = document.getElementById(`store-${port}`);
+            
+            // Update Status & Colors
+            wrapper.className = `node-wrapper ${data.role}`;
+            document.getElementById(`role-${port}`).innerText = data.role;
+            document.getElementById(`term-${port}`).innerText = `T:${data.term}`;
+
+            // Update Store Table
+            const store = data.store || {};
+            const keys = Object.keys(store);
+            if (keys.length > 0) {
+                storeDiv.innerHTML = keys.map(k => `
+                    <div class="store-row">
+                        <span class="key">${k}</span>
+                        <span class="val">${JSON.stringify(store[k])}</span>
+                    </div>
+                `).join('');
+            }
+        };
+        ws.onclose = () => {
+            document.getElementById(`node-${port}`).classList.add('offline');
+            setTimeout(() => connect(port), 2000);
+        };
+    }
+
+    ports.forEach(connect);
+</script>
+</body>
+</html>

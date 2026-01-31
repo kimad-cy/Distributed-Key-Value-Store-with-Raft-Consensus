@@ -96,3 +96,31 @@ func (n *Node) GetLog() []LogEntry {
     copy(logCopy, n.Log)
     return logCopy
 }
+
+func (n *Node) GetFullStatus() map[string]interface{} {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	return map[string]interface{}{
+		"id":           n.ID,
+		"role":         n.Role,
+		"term":         n.CurrentTerm,
+		"commit_index": n.CommitIdx,
+		"leader_id":    n.CurrentLeader,
+		"log_len":      len(n.Log),
+		"peers":        n.Peers,
+		"store":        n.Store.Snapshot(),
+	}
+}
+
+func (n *Node) SimulateCrash() {
+    n.mu.Lock()
+    defer n.mu.Unlock()
+        
+    if n.heartbeatTicker != nil {
+        n.heartbeatTicker.Stop()
+    }
+    if n.ElectionTimer != nil {
+        n.ElectionTimer.Stop()
+    }
+}

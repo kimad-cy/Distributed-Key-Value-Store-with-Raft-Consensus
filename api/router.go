@@ -18,6 +18,11 @@ func NewRouter(node *cluster.Node) http.Handler {
             handlers.SetKey(w, r)
         case r.Method == "GET" && r.URL.Path == "/cluster/status":
             handlers.ClusterStatus(w, r)
+        case r.URL.Path == "/ws":
+            handlers.StatusWebsocket(w, r)
+        case r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/node/kill"):
+            handlers.Node.SimulateCrash()
+            w.WriteHeader(http.StatusOK)
         default:
             http.NotFound(w, r)
         }
