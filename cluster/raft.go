@@ -29,7 +29,8 @@ func (n *Node) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply)
 
     n.CurrentLeader = args.LeaderID
     n.Role = "Follower"
-	
+	n.Persist()
+
 	if len(args.Entries) == 0 {
 		// Heartbeat
 		n.resetElectionTimer()   
@@ -103,6 +104,8 @@ func (n *Node) ApplyEntries(args AppendEntriesArgs){
         n.CommitIdx++
     }
 	}
+	n.Persist()
+
 
 }
 
@@ -197,6 +200,8 @@ func (n *Node) HandleAppendEntriesReply(followerAddr string, resp AppendEntriesR
 		n.CurrentLeader = -1
 		n.resetElectionTimer()
 	}
+	n.Persist()
+
 }
 
 func (n *Node) CommitLogEntries() {

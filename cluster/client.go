@@ -5,6 +5,7 @@ import (
 	"net/rpc"
 )
 
+//when HTTP handler receives a request
 func (n *Node) HandleClientCommand(cmd string, key string, value interface{}){
     n.mu.Lock()
     if n.Role != "Leader" {
@@ -21,6 +22,8 @@ func (n *Node) HandleClientCommand(cmd string, key string, value interface{}){
     }
     n.Log = append(n.Log, entry)
     n.ackedLength[n.Address] = len(n.Log)
+    n.Persist()
+
     n.mu.Unlock()
     
     for _, peer := range n.Peers {
@@ -28,6 +31,7 @@ func (n *Node) HandleClientCommand(cmd string, key string, value interface{}){
     }
 }
 
+//when a node forwards a request to another node via RPC
 func (n *Node) HandleClientCommandRPC(args *ClientCommandArgs, reply *ClientCommandReply) error {
     n.mu.Lock()
     defer n.mu.Unlock()

@@ -55,6 +55,8 @@ func (n *Node) StartElection() {
 	currentTerm := n.CurrentTerm 
 	myAddress := n.Address  
     peers := n.Peers
+	n.Persist()
+
 	n.mu.Unlock()
 
 	fmt.Printf("[Node %d] starting election (term %d), sending to peers: %v\n", n.ID, currentTerm, peers)
@@ -136,6 +138,8 @@ func (n *Node) RequestVote(args *RequestVoteArgs,reply *RequestVoteReply,) error
 	}
 
 	reply.Term = n.CurrentTerm
+	n.Persist()
+
 	return nil
 }
 
@@ -179,6 +183,8 @@ func (n *Node) processVoteReply(peer string, reply *RequestVoteReply) {
 		}
 
 	}
+	n.Persist()
+
 }
 
 func (n *Node) becomeLeader() {

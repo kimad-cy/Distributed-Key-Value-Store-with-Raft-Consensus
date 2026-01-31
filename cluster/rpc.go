@@ -49,6 +49,7 @@ func (n *Node) Start() error {
 	go server.Accept(listener)
 
 	n.startElectionTimer()
+    n.Persist()
 	
 	return nil
 }
